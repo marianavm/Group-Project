@@ -1,0 +1,376 @@
+---
+title: "Project"
+author: "Jiaxi Yang, Mariana Meireles, Mario Flores"
+date: "12/12/2019"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+# Overview
+**Motivation**
+
+Suicide is a major public health concern worldwide and occurs throughout the lifespan. Close to 800,000 people die due to suicide every year, which is equivalent to one person every 40 seconds. Suicide is defined as a death caused by an intentional self-directed injury. It varies by age, sex, and means of suicide. A myriad of factors underlies suicide mortality, including both risk factors and protective factors at the individual, family, community, and societal levels. Suicide mortality is one of the proposed indicators for measuring the [Sustainable Development Goal 3.4.2](https://sustainabledevelopment.un.org/sdg3), which aims at reducing by one third premature mortality from non-communicable diseases through prevention and treatment by 2030, as well as promoting mental health and well-being. Given the focus on preventing suicide internationally and by specific countries, an accounting of levels and trends of suicide mortality, including analyses by region, country, and gender would be helpful to inform suicide prevention efforts. Furthermore, given the stigmatization around suicide and other related mental health problems, there is a need for innovative strategies that better inform wider audiences and create awareness in the general population.
+
+**Aims**
+
+1. To describe the global trends of suicide mortality from 1985 to 2016 by relevant sociodemographic factors using appropriate visualizations.
+
+2. To describe the gender differences in suicide rates by region and country using appropriate visualizations.
+
+3. To create an interactive visualization that allows users to explore our findings and can effectively inform our results to a general audience. 
+
+**Related work**
+
+This project was inspired by Hans Rosling's TED talk "[The best stats you've ever seen](https://www.youtube.com/watch?v=hVimVzgtD6w&t=1073s)" and the class on data visualization principles. 
+
+**Initial questions**
+
+The initial questions that we tried to answer were:
+
+1. What are the overall trends in suicide rates over the past years? Is there an increase or decrease in these rates over the past years? How do the trends of suicide look like when stratified by important sociodemographic factors including region, country, and gender?
+
+2. Are suicide rates different between men and women? Is this a global, regional or country-specific trend? If suicide rates differ between men and women, by how much do they differ?
+
+3. What is the best way to report our finding using visualizations? How can we adapt and optimize graphs to the audience? 
+
+
+# Data
+
+We used the dataset "[Suicide Rate Overview 1985 to 2016](https://www.kaggle.com/russellyates88/suicide-rates-overview-1985-to-2016)" obtained from the website kaggle. This is a compiled dataset from different sources including the United Nations Development Program, The World Bank, and the World Health Organization. We also used a dataset with the World Bank Classification for regions and income (available [here](https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups)).
+
+
+# Analysis
+
+**Aim 1 - Analysis of trends of suicide over time, by country, and by region**
+
+For this aim, we first explored country-specific average annual suicide rates as well as region-specific average annual suicide rates. Then, we calculated country-specific suicide rates over time and looked at 4 countries to better understand and describe these rates. To further explore these trends, we calculated the percent change in suicide rates from the early 2000's to the early 2010's by country and region.
+
+When we are examining country-specific annual suicide rates, region-specific annual suicide rates, and rates by gender, one thing that we have noticed in the suicide dataset was that not all countries have suicide data for all years. Therefore, the suicide rate for some countries might be missing for a particular year. For calculating the average country-specific and region-specific suicide rates, we used all the available data and did not exclude data from any country. In later analysis, we will restrict our analysis to acknowledge the potential bias caused by the incomplete data. We will look at rates in the early 2000's and early 2010's. We'll compute a 5 year average, and countries that don't have data for any of the 5 years will be excluded.
+
+One of the limitations of theses analyses is that not all countries have suicide statistics across all years when plotting the data. Therefore, for a given country when the suicide rate for a particular year is missing, r will smooth the line by connecting the two adjacents dots from earlier year and later year where the data was available. Therefore, even though we see a smooth line overtime for a particular country, we need be mindful that not all years have data on suicide rates.
+
+
+```{r, include=FALSE}
+suicide <- read.csv("master.csv")
+world_bank <- read.csv("world_bank.csv")
+library(tidyverse)
+library(ggplot2)
+library(shiny)
+library(dplyr)
+suicide <- left_join(suicide,world_bank, by="country", copy=TRUE)
+
+#for windows use the following:
+#setwd("C:\\Users\\mario\\Desktop\\HSPH\\PhD\\Courses\\Year 1 PhD 2019-2020\\Fall\\BST 260\\final")
+#suicide <- read.csv("master.csv", stringsAsFactors = FALSE,  fileEncoding="UTF-8-BOM")
+#world_bank <- read.csv("world_bank.csv", stringsAsFactors = FALSE)
+#suicide <- left_join(suicide,world_bank, by="country", copy=TRUE)
+#library(tidyverse)
+#library(ggplot2)
+#library(shiny)
+#library(dplyr)
+#suicide <- left_join(suicide,world_bank, by="country", copy=TRUE)
+
+```
+
+*Let's get average rate of suicide per year per 1,000,000 people for each region as well as each country:*
+```{r}
+suicide<-suicide%>%group_by(region,year)%>%mutate(region_rate_per_year=1000000*sum(suicides_no)/sum(population,na.rm=TRUE))
+suicide<-suicide%>%group_by(country,year)%>%mutate(country_rate_per_year=1000000*sum(suicides_no)/sum(population,na.rm=TRUE))
+
+```
+
+
+*Then, we can use the above rates for each year and each country to calculate the average suicide rates across all years for each country. We do the same for each region to get a region-specific average suicide rate across all years for all countries in a given region.*
+```{r}
+suicide<-suicide%>%group_by(region)%>%mutate(region_ave_suicide_rate_across_yr=mean(region_rate_per_year),na.rm=TRUE)
+
+suicide<-suicide%>%group_by(country)%>%mutate(country_ave_suicide_rate_across_yr=mean(country_rate_per_year),na.rm=TRUE)
+
+suicide_new<-suicide%>%select(region,country,country_ave_suicide_rate_across_yr,region_ave_suicide_rate_across_yr)
+suicide_rate_single_entry<-subset(suicide_new,!duplicated(country))
+suicide_rate_single_entry_region<-subset(suicide_new,!duplicated(region))
+
+```
+
+*Now, let's compare average suicide rate across all years between different regions, and let's find out which countries have the highest and the lowest suicide rates across years. We can do so by creating a plot for region-specific suicide rate across years and another plot to show the average rate of suicide for each country (regardless of years), ranking from highest rate to lowest rate:*
+
+```{r}
+suicide_rate_single_entry_region%>%ggplot(aes(x=reorder(region,-region_ave_suicide_rate_across_yr),y=region_ave_suicide_rate_across_yr))+geom_col()+ theme(axis.text.x = element_text(angle = 90, hjust = 1,size=14))+ggtitle("Region-specific Average Annual Suicide Rates")+xlab("Region")+ylab("average annual suicide rate per 1000,000")
+```
+
+*Based on the plot above, we can see that South Asia has the highest average suicide rates across years and sub-Saharan Africa has the lowest suicide rate across years.*
+
+```{r}
+suicide_rate_single_entry%>%ggplot(aes(x=reorder(country,-country_ave_suicide_rate_across_yr),y=country_ave_suicide_rate_across_yr))+geom_bar(stat = "identity")+ theme(axis.text.x = element_text(angle = 90, hjust = 1,size=5))+ggtitle("Country-specific Average Annual Suicide Rates")+xlab("Country")+ylab("average annual suicide rate per 1000,000")
+```
+
+*We can see that Lithuania has the highest average annual suicide rate, whereas Dominica and Saint Kitts and Nevis have the lowest annual suicide rate. We can also see that the US is in the middle of the distribution.*
+
+
+*Let's look at country-specific trends of suicide over time to have a better idea about the burden of suicide in a few selected countries. For this analysis, we will only look at Lithuania, the US, Mexico, and Canada.*
+
+```{r}
+suicide_us<-suicide%>%filter(country=="Lithuania")
+suicide_us_new<-subset(suicide_us,!duplicated(country_rate_per_year))
+suicide_us_new%>%ggplot(aes(year,country_rate_per_year))+geom_line(mapping=NULL,color="blue")+ggtitle("Trend in Averaege Suicide Rate - Lithuania")+xlab("Year")+ylab("Annual suicide rate per 1000,000")
+
+```
+
+*We can see the suicide rate for this country has importantly decreased from 1995 to 2015, which is great news!*
+
+
+*What about the US?*
+
+```{r}
+suicide_us<-suicide%>%filter(country=="United States")
+suicide_us_new<-subset(suicide_us,!duplicated(country_rate_per_year))
+suicide_us_new%>%ggplot(aes(year,country_rate_per_year))+geom_line(mapping=NULL,color="blue")+ggtitle("Trend in Averaege Suicide Rate - United States")+xlab("Year")+ylab("Annual suicide rate per 1000,000")
+
+```
+
+*Surprisingly, it seems that the suicide rate in the US has increased since 2000 and there does not seem to be any trend towards a decline in the coming years. Let's see if this is also the case for the 2 beloved neighbors of the US: Mexico and Canada.*
+
+```{r}
+suicide_us<-suicide%>%filter(country=="Mexico")
+suicide_us_new<-subset(suicide_us,!duplicated(country_rate_per_year))
+suicide_us_new%>%ggplot(aes(year,country_rate_per_year))+geom_line(mapping=NULL,color="blue")+ggtitle("Trend in Averaege Suicide Rate - Mexico")+xlab("Year")+ylab("Annual suicide rate per 1000,000")
+
+```
+
+```{r}
+suicide_us<-suicide%>%filter(country=="Canada")
+suicide_us_new<-subset(suicide_us,!duplicated(country_rate_per_year))
+suicide_us_new%>%ggplot(aes(year,country_rate_per_year))+geom_line(mapping=NULL,color="blue")+ggtitle("Trend in Annual Suicide Rates - Canada")+xlab("Year")+ylab("Annual suicide rates per 1,000,000")
+
+```
+
+*We can observe that, similar to the US, suicide in Mexico is on the rise, although the suicide rate in Mexico is considerably lower than that of the US. In contrast to these countries, the suicide rate in Canada seems to be in decline, which is in line with what we observed in Lithuania and also to what has been reported for most of the countries worldwide (Global Burden of Disease 2016). Nonetheless, even with this declining trend, the suicide rates in Canada are still higher than in Mexico in any given year.*
+
+
+*Finally, let's look at the proportional change in suicide rates by country and region. Since the database has information for several years, we can look at the trends in suicide rates. Let's look at rates in the early 2000's and early 2010's. Since most countries do not have data for every year, we'll compute a 5 year average. Since there are countries that don't have data for any of the 5 years, we'll exclude them.*
+```{r}
+suic_totals <- suicide %>%
+  select (country,year,sex,suicides_no, population) %>%
+  group_by(country,year,sex) %>%
+  summarise(suic_total=sum(suicides_no), pop_total=sum(population)) %>%
+  mutate (rate=1000000*suic_total/pop_total)
+suic_totals <- left_join(suic_totals,world_bank, by="country", copy=TRUE)
+
+```
+
+```{r}
+suic2010 <- suic_totals %>%
+  filter (year>=2010 & year<=2014) %>%
+  select(country, year, suic_total, pop_total) %>%
+  group_by(country) %>%
+  summarise(rate_2010=sum(suic_total)*1000000/sum(pop_total)) %>%
+   left_join(world_bank, by="country", copy=TRUE)
+  
+
+suic_trend <- suic_totals %>%
+  filter (year>=2000 & year<=2004) %>%
+  select(country, year, suic_total, pop_total) %>%
+  group_by(country) %>%
+  summarise(rate_2000=sum(suic_total)*1000000/sum(pop_total)) %>%
+  left_join(suic2010, by="country", copy=TRUE) %>%
+  filter(!is.na(rate_2000) & !is.na(rate_2010))
+
+```
+
+*We'll calculate the variation in terms of proportion, and look at the country variations.*
+```{r}
+suic_trend <- suic_trend %>%
+    mutate(prop=(rate_2010*100/rate_2000)-100)
+
+
+sum(suic_trend$prop<0)/nrow(suic_trend)
+sum(suic_trend$prop>0)/nrow(suic_trend)
+
+arrange(suic_trend,(prop))
+arrange(suic_trend,desc(prop))
+```
+*Here we have some good news! We can see that 69.8% of countries had a decrease in their suicide rates, while 30.2% had an increase (the US being one of them as we previously observed). We also have a list of the countries with the highest increases and decreases.*
+
+
+*Now we'll look at this data by region:*
+
+```{r}
+suic_trend %>% ggplot() +
+  geom_boxplot(aes(region,prop)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylim(-120,120) +
+  geom_hline(yintercept = 0, colour="red")
+  
+```
+
+*We can see that, on average, all regions had a decrease in their suicide rates, with the only exception of North America (note - South Asia only had one country with information for the period). This was driven by the US, who had a 19.2% increase in its suicide rates, while Canada had a 3.5% decrease.*
+
+
+
+In summary, we observed that there is a lot of variability in country-specific average annual suicide rates across countries. Lithuania was the country with the highest average annual suicide rate and Dominica and Saint Kitts and Nevis have the lowest annual suicide rate. When we look at country-specific suicide rates over time, we observed that rates in Lithuania and Canada have decreased over the past years, which is consistent with the trends observed worldwide. However, we found that suicide is on the rise in the US and Mexico which should be subject of a more comprehensive future analysis. Finally, when we looked at the proportional change in suicide rates by country and region, we observed that suicide rates have decreased in almost 70% of the countries as well as in all the regions but North America where we observed an increased that was  driven by the increasing US rates. 
+
+
+**Aim 2 - Analysis of gender differences in suicide, by country and region**
+
+For this aim, we tried to explore gender differences in suicide rates, and assess whether they differ between different regions and countries. We also perform some analyses to evaluate the trends in gender-specific suicide rates since the early 2000's.
+
+
+*Does gender play a role in suicide rates? Let's find out! First, let's look at some summary statistics for gender-specific rates:*
+
+```{r}
+suic_totals %>%
+  group_by(sex) %>%
+  summarise(Min_rate=min(rate), Max_rate=max(rate), Mean_rate=mean(rate), Median_rate=median(rate))
+```
+
+*We can see that the mean and median rates in males are much higher than in females. We can also calculate country-specific suicide rate by gender for each year:*
+
+```{r}
+suicide_sex<-suicide%>%group_by(sex,country,year)%>%mutate(country_rate_per_yr_by_sex=100000*sum(suicides_no)/sum(population,na.rm=TRUE))
+suicide_sex$rate_per_yr_by_sex_new<-paste0(as.character(suicide_sex$country)," ", as.character(suicide_sex$sex)," ",as.character(suicide_sex$year))
+suicide_rate_single_entry_by_sex<-subset(suicide_sex,!duplicated(rate_per_yr_by_sex_new))
+
+```
+
+*Now we can plot the trend in the suicide rate for any country by sex. First, we take the US as an example:*
+
+```{r}
+gender<-c("Female","Male")
+labels <- data.frame(sex = gender, x = c(2010, 2010), y = c(7.5, 19.0))
+suicide_rate_us_sex<-suicide_rate_single_entry_by_sex%>%filter(country=="United States")
+suicide_rate_us_sex%>%ggplot(aes(year,country_rate_per_yr_by_sex,color=sex))+geom_line(mapping = NULL)+ggtitle("Trend in averaege suicide rate, by gender - United States")+xlab("Year")+ylab("Annual suicide rate per 100,000")+geom_text(data=labels,aes(x,y,label=sex),size=5,color="black")+theme(legend.position = "none")
+
+```
+
+*Based on the trend in the U.S. average suicide rate by gender, we can conclude that the suicide rate is higher for males compared to females. However, does it hold in general, worldwide? Instead of getting a country-specific suicide rate, we calculate the average global suicide rate by gender.*
+
+```{r}
+suicide_rate_single_entry_by_sex<-suicide_rate_single_entry_by_sex%>%group_by(year,sex)%>%mutate(ave_rate_year_by_sex=100000*sum(suicides_no/sum(population,na.rm=TRUE)))
+new_gender<-c("Female","Male")
+new_labels <- data.frame(sex = new_gender, x = c(2010, 2010), y = c(18.0, 45.0))
+suicide_rate_single_entry_by_sex%>%ggplot(aes(year,ave_rate_year_by_sex,color=sex))+geom_line(mapping=NULL)+ggtitle("Trend in World Suicide Rates by Gender")+xlab("Year")+ylab("Annual suicide rate per 100,000")+geom_text(data=new_labels,aes(x,y,label=sex),size=5,color="black")+theme(legend.position = "none")
+```
+
+*According to the plot generated above, we can conclude that the gender-specific suicide rate is also higher for males compared to females across the world. Also, we can tell from the plot that the suicide rate for males is decreasing overtime approximately after the year 2000. It is important, however, to take into account that the amount of information about suicide available by country varies between years and the plotted suicide rate for some years might be based on data from a limited number of countries. This ultimately affects the comparability of the yearly suicide rates, although differences between males and females might still be useful since we expect the heterogeneity in the amount of data to affect equally the estimates for males and females.*
+
+
+*Now let's see what happens when we further stratify by region:*
+```{r, echo=FALSE}
+suic_totals %>%
+  group_by(region, sex) %>%
+  summarise(Min_rate=min(rate), Max_rate=max(rate), Mean_rate=mean(rate), sd_rate=sd(rate), Median_rate=median(rate))
+```
+
+*There seems to be quite a lot of regional differences. We have data from 1985 to 2016 in our dataset, but most countries do not have data for every year. We will then compute average rates for each country over the most recent 10 years in the dataset:*
+```{r}
+suic20072016 <- suic_totals %>%
+  filter (year>=2007) %>%
+  select(country, year, sex, suic_total, pop_total) %>%
+  group_by(country,sex) %>%
+  summarise(rate_20072016=sum(suic_total)*100000/sum(pop_total)) %>%
+  left_join(world_bank, by="country", copy=TRUE)
+```
+
+
+*We know now that the rates are overall higher for males than for females. But does that hold for every country? We can look at this through this plot*
+```{r}
+suic_wide <- suic20072016 %>%
+  select(country,region,sex,rate_20072016) %>%
+  spread(sex, rate_20072016)
+
+suic_wide %>%
+  ggplot() +
+  geom_point(aes(x=female, y=male, color=region), size=1) +
+  ylab("Suicide rates in males") +
+  xlab("Suicide rates in females") +
+  xlim(0,70) +
+  ylim(0,70)
+
+ 
+```
+
+*From this graph, we can see there are no countries where the suicide rate is higher in females than in males.*
+
+*We can also look at this disaggregated data by Region:*
+```{r}
+suic20072016 %>%
+  ggplot() +
+  geom_boxplot(aes(region, rate_20072016, fill=sex)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylab("") +
+  xlab("") +
+  ggtitle("Suicide rates by sex and Region, 2007-2016")
+```
+
+*We can see from this plot and from the table above that the region with the highest mean suicide rates for males is Europe & Central Asia, followed closely by South Asia and then by East Asia & Pacific. For females, mean rates are highest in the East Asia & Pacific Region, followed by Europe & Central Asia.*
+
+*The region with the highest difference between male and female suicide rates is Europe & Central Asia, where means are 24.9 and 6.9, respectively, and the difference is 18. The region where this difference is smaller is Middle East & Northern Africa, where means are 5.8 and 1.8, respectively, and the difference is 4.0.*
+
+
+*We can now look at these differences by country.*
+```{r}
+suic_wide <- suic20072016 %>%
+  select(country,region,sex,rate_20072016) %>%
+  spread(sex, rate_20072016) %>%
+  mutate (diff=male-female)
+
+arrange(suic_wide,(diff))
+arrange(suic_wide,desc(diff))
+```
+
+
+*Again, we can see there are no countries where the suicide rates (averaged over the past ten years) are higher for females than for males. Antigua & Barbuda has a very small difference between the sexes, only 0.029, and Lithuania has the highest. Since the rates vary greatly between countries, it might be more appropriate to look at these differences as a proportion. Let's look at how much greater the male rates are as a proportion of the female rates:*
+
+```{r}
+suic_wide <- suic_wide %>%
+  mutate (prop=(100*male/female)-100)
+
+arrange(suic_wide,(prop))
+arrange(suic_wide,desc(prop))
+```
+*We can see that some of the countries change in this analysis. Even in countries where the proportions are smaller, we can see that by the 6th country in the list (South Korea), the rate in males is already twice that of females. On the table with descending order, we can see that the top 10 countries have rates in males that are at least 5 times that of females (Note-proportion for Oman was calculated as $\infty$ since rate for females is 0).*
+
+In summary, we observed that suicide is a greater problem among males than among females, and this finding is consistent among all regions and countries, although the suicide rates are very heterogeneous.
+
+
+**Aim 3 - Interactive plot for country-specific suicide rates by gender**
+
+
+We created a user-interactive shiny app that allows the user to plot the rates of suicide over time by gender for a selected country. As we mentioned earlier, we are aware that when R plots the country-specific suicide rates by gender (using the geom_line function), it will connect the data points by fitting a smooth line. Therefore, for years with missing suicide rate data, R will plot a linear smoothing curve. However, we have conducted a sensitivity analysis in the previous section by only looking at specific time windows in Aim 2 and found consistent results.
+
+
+```{r}
+shinyApp(
+#we define ui:
+  ui<-fluidPage(
+    fluidRow(
+      column(3,selectInput(inputId = "country",label="Select a Country",
+    choices=as.list(levels(suicide_rate_single_entry_by_sex$country)))
+    ),
+    column(9,plotOutput("gender_specific_suicide_plot"))
+    )),
+  
+#we next define the server:
+ server<-function(input,output){
+  output$gender_specific_suicide_plot<-renderPlot({
+    suicide_rate_single_entry_by_sex%>%filter(country %in% input$country)%>%ggplot(aes(year,country_rate_per_yr_by_sex,color=sex))+geom_line(mapping=NULL)+ggtitle("Trend in Suicide Rates by Gender Status")+xlab("Year")+ylab("Annual suicide rate per 1000,000")
+  })
+ }
+)
+```
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
